@@ -1,0 +1,224 @@
+function Txt(a,b,c)d=.2;mo=0;c=tostring(c)for e=1,#c do local f=c:sub(e,e):upper():byte()*3-95;if f>193 then f=f-78 end;f="0x"..string.sub("0000B0101F6F5FAB6DEDA010096690A4A4E4048444080168F9F8FABDDDB9F47DBBDDF3D1FDFF570500580A4AAA4A0391B96E5E6DF99669F9DF15FD96F4F9F978496F88FF3FF1F69625F79FA5FDDA1F1F8F787FCFB4B3C3BFD09F861F902128880219F60F06F9426",f,f+2)for g=0,11 do if f=='0x000'then mo=mo+d end;if f&(1<<g)>0 then local h=a+g//4+e*4-4;screen.drawRectF(h-mo,b+g%4,1,1)end end end end
+
+function circleSpin(sx, sy, l, r)
+	screen.drawLine(sx, sy, sx+l*math.cos(r), sy+l*math.sin(r))
+end
+function circle(x, y, r, segments)
+	local cos, sin = math.cos, math.sin
+	local step = (math.pi * 2) / segments
+	for i = 0, math.pi*2, step do
+		screen.drawLine(x + cos(i) * r, y + sin(i) * r, x + cos(i+step) * r, y + sin(i+step) * r)
+	end		
+end
+function circle2(x, y, r, segments, ctff, alpha)
+	if alpha then
+		screen.setColor(255, 255, 255)
+	end
+	local cos, sin = math.cos, math.sin
+	local step = (math.pi * 2) / segments
+	for i = ctff, math.pi*2, step do
+		if alpha and i > 5.5 then
+			screen.setColor(255, 0, 0)
+		end
+		screen.drawLine(x + cos(i) * r, y + sin(i) * r, x + cos(i+step) * r, y + sin(i+step) * r)
+	end
+end
+function circleSpinC(x, y, l, c, turns)
+	turns = turns - .25
+	-- Convert turns to radians
+	local radians = 2 * math.pi * turns
+	-- Calculate the new point coordinates
+	local newX = x + l * math.cos(radians)
+	local newY = y + l * math.sin(radians)
+	local newX1 = x + (c+l) * math.cos(radians)
+	local newY1 = y + (c+l) * math.sin(radians)
+	
+	-- Draw the point
+	screen.drawLine(newX, newY, newX1, newY1)
+end
+
+function dymC(v, ma, cf, co)
+	screen.setColor(cf[1], cf[2], cf[3])
+	if v > ma then
+		screen.setColor(co[1], co[2], co[3])
+	end
+end
+function sc(n)
+	screen.setColor(sh[n][1], sh[n][2], sh[n][3])
+end
+sh = {{255, 0, 0}, {0, 150, 255}, {255, 255, 255}}
+-- define the PID generator function
+function PID(Kp, Ki, Kd, min, max)
+    return {
+        Kp = Kp,
+        Ki = Ki,
+        Kd = Kd,
+        min = min,
+        max = max,
+        integral = 0,
+        last_error = 0,
+        run = function(self, sp, pv)
+            local error = sp - pv
+            self.integral = math.max(self.min, math.min(self.max, self.integral + error * self.Ki))
+            local derivative = (error - self.last_error)
+            self.last_error = error
+            return self.Kp * error + self.integral + self.Kd * derivative
+        end
+    }
+end
+
+-- create a pid
+eng1 = PID(.5, .01, 1, .01, 1)
+eng2 = PID(.5, .01, 1, .01, 1)
+critical = false
+j=50
+k=1000
+function getN(...)local a={}for b,c in ipairs({...})do a[b]=input.getNumber(c)end;return table.unpack(a)end
+
+function onTick()
+	eng1RPS, eng1TMP, eng1RTM, eng2RPS, eng2TMP, eng2RTM, eng1IN, eng2IN = getN(1,2,3,4,5,6,7,8)
+	eng1CTF = input.getBool(5)
+	eng2CTF = input.getBool(6)
+	
+	fuel = input.getNumber(9)*.85
+
+	eng1S = eng1IN*180
+	eng2S = eng2IN*180
+	
+	eng1AT = (eng1TMP*j)
+	eng2AT = (eng2TMP*k)
+	
+	if eng1RTM > j then
+		eng1AT = eng1AT + (eng1RTM*2)
+	end
+	if eng2RTM > j then
+		eng2AT = eng2AT + (eng2RTM*2)
+	end
+
+	if eng1CTF then
+		eng1THR = eng1:run(eng1S, eng1RPS)
+	end
+	if eng2CTF then
+		eng2THR = eng2:run(eng2S, eng2RPS)
+	end
+
+	output.setNumber(1, eng1THR)
+	output.setNumber(2, eng2THR)
+end
+
+function onDraw()
+	sc(2)
+	circleSpin(15, 15, 8, -4+((eng1IN*100)/25))
+	circleSpin(45, 15, 8, -4+((eng2IN*100)/25))
+	circle2(15, 15, 10, 10, 2, true)
+	circle2(45, 15, 10, 10, 2, true)
+
+	circle2(15, 45, 10, 10, 2, true)
+	circle2(45, 45, 10, 10, 2, true)
+	sc(3)
+	screen.drawRect(12, 17, 16, 8)
+	screen.drawRect(42, 17, 16, 8)
+
+	ltb = eng1AT>k and 21 or 16
+	rtb = eng2AT>k and 21 or 16
+	screen.drawRect(12, 47, ltb, 8)
+	screen.drawRect(42, 47, rtb, 8)
+
+	dymC(eng1RPS/1.8, 80, {0, 255, 0}, {255, 0, 0})
+	screen.drawText(13, 18, math.floor(eng1RPS/1.8))
+	circleSpin(15, 15, 8, -4+((eng1RPS/1.8)/25))
+
+	dymC(eng2RPS/1.8, 80, {0, 255, 0}, {255, 0, 0})
+	screen.drawText(43, 18, math.floor(eng2RPS/1.8))
+	circleSpin(45, 15, 8, -4+((eng2RPS/1.8)/25))
+
+
+	dymC(eng1AT, 800, {0, 255, 0}, {255, 0, 0})
+	screen.drawText(13, 48, math.floor(eng1AT))
+	circleSpin(15, 45, 8, -4+math.min((eng1AT/250), 4))
+
+	dymC(eng2AT, 800, {0, 255, 0}, {255, 0, 0})
+	screen.drawText(43, 48, math.floor(eng2AT))
+	circleSpin(45, 45, 8, -4+math.min((eng2AT/250), 4))
+	
+	sc(3)
+	screen.drawText(26, 7, 'N1')
+	screen.drawText(28, 39, 'C')
+	screen.drawLine(65, 10, 65, 60)
+	screen.drawLine(10, 65, 60, 65)
+	screen.drawLine(65, 70, 65, 90)
+	screen.drawLine(70, 65, 90, 65)
+	if critical then
+		screen.setColor(255, 0, 0)
+		screen.drawText(71, 70, 'land\nasap')
+	end
+	hd = false
+	if eng1RTM > 50 and not hd then
+		critical = true
+		hd = true
+		sc(1)
+		Txt(5, 68, 'ENG 1 FIRE')
+		sc(2)
+		Txt(5, 74, 'THR LEVER 1.IDLE')
+		Txt(5, 80, 'ENG CTFF 1...OFF')
+		Txt(5, 86, 'ENG 1 FB...DISC')
+	end
+	if eng2RTM > 50 and not hd then
+		critical = true
+		hd = true
+		sc(1)
+		Txt(5, 68, 'ENG 2 FIRE', .2)
+		sc(2)
+		Txt(5, 74, 'THR LEVER 2.IDLE')
+		Txt(5, 80, 'ENG CTFF 2...OFF')
+		Txt(5, 86, 'ENG 2 FB...DISC')
+	end
+	if ((((eng1RPS<1) or (eng2RPS<1)) and not (eng1RPS<1 and eng2RPS<1)) and not hd) then
+		fd = eng1RPS<1 and 1 or 2
+		critical = true
+		hd = true
+		sc(1)
+		Txt(5, 68, 'ENG '..fd..' FAIL', .2)
+		sc(2)
+		Txt(5, 74, 'ENG MODE SEL.IGN')
+		Txt(5, 80, 'THR LEVER '..fd..'..IDLE')
+		Txt(5, 86, 'ENG MASTER '..fd..'.OFF')
+	end
+	if (eng1RPS<1) and (not hd) and (eng2RPS<1) and (not eng1CTF) and (not eng1CTF) then
+		critical = true
+		hd = true
+		sc(1)
+		Txt(5, 68, 'ENG DUAL FAIL')
+		sc(2)
+		Txt(1, 74, 'EMER ELEC PWR..ON')
+		Txt(1, 80, 'THR LEVERS...IDLE')
+		Txt(1, 86, 'FAC 1..OFF THEN ON')
+	end
+	if fuel < k and not hd and fuel > 500 then
+		critical = true
+		hd = true
+		screen.setColor(255, 150, 0)
+		Txt(5, 68, 'LOW FUEL')
+		sc(2)
+		Txt(5, 74, 'PAC 1.......OFF')
+		Txt(5, 80, 'THR LEVERS...25%')
+		Txt(5, 86, 'CLIMB NOW', .2)
+	end
+	if fuel < 500 and not hd then
+		critical = true
+		hd = true
+		sc(1)
+		Txt(5, 68, 'CRITICAL FUEL')
+		sc(2)
+		Txt(5, 74, ' PACS.......OFF')
+		Txt(5, 80, 'ALL LIGHTS..OFF')
+		Txt(1, 86, 'LAND IMMEDIATELY')
+	end
+	if hd == false then
+		critical = false
+	end
+	screen.setColor(0, 150, 255)
+	screen.drawText(72, 39, 'FOB:')
+	screen.drawText(70, 46, math.floor(fuel))
+	screen.drawText(76, 53, 'KG')
+end
